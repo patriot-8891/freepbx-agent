@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    #parse('velocity/html_head.vm')
+    <title>Peer status</title>
+</head>
+<body>
+<div class="pure-g">
+    <div class="pure-u-1">
+        <table class="pure-table pure-table-bordered" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>Instance</th>
+                <th>Peer</th>
+                <th>Status</th>
+                <th>Address</th>
+                <th>State</th>
+            </tr>
+            </thead>
+            <tbody>
+                #foreach ( $item in ${body} )
+                <tr>
+                    <td>
+                        <span title="${item}">${item['_INSTANCE']|''}</span>
+                    </td>
+                    <td>${item['PEER']|''}</td>
+                    <td>${item['PEER_STATUS']|''}</td>
+                    <td>${item['ADDRESS']|''}</td>
+                    <td>${item['STATE']|''}</td>
+                </tr>
+                #end
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

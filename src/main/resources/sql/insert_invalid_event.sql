@@ -1,0 +1,40 @@
+MERGE INTO INVALID_EVENT_LOG
+(
+    EVENT,
+    EVENT_TV,
+    SEVERITY,
+    SERVICE,
+    EVENT_VERSION,
+    ACCOUNT_ID,
+    SESSION_ID,
+    LOCAL_ADDRESS,
+    REMOTE_ADDRESS,
+    ATTEMPTED_TRANSPORT,
+    MODULE,
+    SESSION_TV,
+    CHALLENGE,
+    RECEIVED_CHALLENGE,
+    RECEIVED_HASH,
+    _INSTANCE,
+    _TIMESTAMP
+)
+VALUES
+(
+    :#${body['Event']},
+    PARSEDATETIME(:#${body['EventTV']}, 'yyyy-MM-dd''T''HH:mm:ss.SSSZ'),
+    :#${body['Severity']},
+    :#${body['Service']},
+    :#${body['EventVersion']},
+    :#${body['AccountID']},
+    :#${body['SessionID']},
+    :#${body['LocalAddress']},
+    :#${body['RemoteAddress']},
+    :#${body['AttemptedTransport']},
+    :#${body['Module']},
+    :#${body['SessionTV']},
+    :#${body['Challenge']},
+    :#${body['ReceivedChallenge']},
+    :#${body['ReceivedHash']},
+    :#${headers['AMI_INSTANCE']},
+    PARSEDATETIME(:#${headers['AMI_TIMESTAMP']}, 'yyyy-MM-dd''T''HH:mm:ss.SSSZ')
+);

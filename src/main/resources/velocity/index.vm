@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    #parse('velocity/html_head.vm')
+    <title>Registrations</title>
+</head>
+<body>
+<div class="pure-g">
+    <div class="pure-u-1">
+        <table class="pure-table pure-table-bordered" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>Instance</th>
+                <th>Channel</th>
+                <th>Username</th>
+                <th>Domain</th>
+                <th>Status</th>
+                <th>Cause</th>
+            </tr>
+            </thead>
+            <tbody>
+                #foreach ( $item in ${body} )
+                <tr>
+                    <td>
+                        <span title="${item}">${item['_INSTANCE']|''}</span>
+                    </td>
+                    <td>${item['CHANNEL_TYPE']|''}</td>
+                    <td>${item['USERNAME']|''}</td>
+                    <td>${item['DOMAIN']|''}</td>
+                    <td>${item['STATUS']|''}</td>
+                    <td>
+                    #if(${item['STATUS']} != 'Registered')
+                        ${item['CAUSE']|''}
+                    #end
+                    </td>
+                </tr>
+                #end
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    #parse('velocity/html_head.vm')
+    <title>Invalid events</title>
+</head>
+<body>
+<div class="pure-g">
+    <div class="pure-u-1">
+        <table class="pure-table pure-table-bordered" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>Instance</th>
+                <th>Event</th>
+                <th>Service</th>
+                <th>Account</th>
+                <th>Address</th>
+            </tr>
+            </thead>
+            <tbody>
+                #foreach ( $item in ${body} )
+                <tr>
+                    <td>
+                        <span title="${item}">${item['_INSTANCE']|''}</span>
+                    </td>
+                    <td>${item['EVENT']|''}</td>
+                    <td>${item['SERVICE']|''}</td>
+                    <td>${item['ACCOUNT_ID']|''}</td>
+                    <td>${item['REMOTE_ADDRESS']|''}</td>
+                </tr>
+                #end
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

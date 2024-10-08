@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    #parse('velocity/html_head.vm')
+    <title>Duplicate registrations</title>
+</head>
+<body>
+<div class="pure-g">
+    <div class="pure-u-1">
+        <table class="pure-table pure-table-bordered" style="width: 100%;">
+            <thead>
+            <tr>
+                <th>Instance</th>
+                <th>Peer</th>
+                <th>Address</th>
+            </tr>
+            </thead>
+            <tbody>
+                #foreach ( $item in ${body} )
+                <tr>
+                    <td>${item['_INSTANCE']|''}</td>
+                    <td>${item['PEER']|''}</td>
+                    <td>${item['ADDRESS']|''}</td>
+                </tr>
+                #end
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

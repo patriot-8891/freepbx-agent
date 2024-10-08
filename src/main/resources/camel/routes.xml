@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<routes xmlns="http://camel.apache.org/schema/spring"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://camel.apache.org/schema/spring https://camel.apache.org/schema/spring/camel-spring.xsd">
+    <route>
+        <from uri="direct:headers"/>
+        <setHeader name="AMI_INSTANCE">
+            <simple>{{freepbx.ami_instance:{{freepbx.ami_address:127.0.0.1}}:{{freepbx.ami_port:5038}}}}</simple>
+        </setHeader>
+        <setHeader name="AMI_TIMESTAMP">
+            <simple>${date:now:yyyy-MM-dd'T'HH:mm:ss.SSSZ}</simple>
+        </setHeader>
+        <setHeader name="HTTP_REFRESH">
+            <simple>{{freepbx.http_refresh:12}}</simple>
+        </setHeader>
+    </route>
+
+    <route>
+        <from uri="timer://tic?fixedRate=true&amp;period={{tic_period:6000}}"/>
+        <to uri="direct:headers"/>
+        <setHeader name="SQL_DELETE_INTERVAL">
+            <simple>{{freepbx.sql_delete_interval:3600}}</simple>
+        </setHeader>
+        <to uri="sql:classpath:sql/delete_by_tic.sql"/>
+    </route>
+
+    <route>
+        <from uri="netty:tcp://{{freepbx.ami_address:127.0.0.1}}:{{freepbx.ami_port:5038}}?clientMode=true&amp;reuseChannel=true&amp;sync=false&amp;disconnectOnNoReply=false&amp;noReplyLogLevel=OFF&amp;decoders=#nettyLineDecoder,#stringDecoder,#amiDecoder,#nettyTimeoutHandler&amp;encoders=#stringEncoder,#nettyTimeoutHandler"/>
+        <!-- BEGIN FILTER LIST -->
+        <!-- Фильтры вынесены сюда что бы разгрузить очередь seda:routeByMessage. -->
+        <!-- TODO: Когда станет понятно что делать с данными сообщениями - надо перенести в seda:routeByMessage.-->
+        <filter>
+            <!-- События диалплана -->
+            <simple>${body['Event']} in 'VarSet,Newexten'</simple>
+            <stop/>
+        </filter>
+        <filter>
+            <!-- AGI события диалплана -->
+            <simple>${body['Event']} in 'AGIExecStart,AGIExecEnd'</simple>
+            <stop/>
+        </filter>
+        <filter>
+            <!-- DTMF события диалплана -->
+            <simple>${body['Event']} in 'DTMFBegin,DTMFEnd'</simple>
+            <stop/>
+        </filter>
+        <filter>
+            <!-- Security события. Сюда попадают в т.ч. авторизация при INVITE!!! -->
+            <!-- TODO: можно ли разделить запросы INVITE от REGISTER? -->
+            <simple>${body['Event']} in 'ChallengeSent,SuccessfulAuth'</simple>
+            <stop/>
+        </filter>
+        <filter>
+            <!-- RTCP события. -->
+            <!-- TODO: можно ли отследить проблемы с голосом? -->
+            <simple>${body['Event']} in 'RTCPSent,RTCPReceived'</simple>
+            <stop/>
+        </filter>
+        <!-- END FILTER LIST -->
+        <to uri="seda:routeByMessage"/>
+    </route>
+
+    <route>
+        <from uri="seda:routeByMessage?size={{freepbx.seda_queue_size:1000}}"/>
+        <to uri="direct:headers"/>
+        <choice>
+            <when>
+                <!-- Welcome строка => AMI Challenge -->
+                <simple>${body['Line']} regex '^Asterisk Call Manager/\d+\.\d+\.\d+$'</simple>
+                <to uri="velocity:velocity/ami_challenge.vm"/>
+                <to uri="seda:reply"/>
+            </when>
+            <when>
+                <!-- MD5 Challenge => AMI Login -->
+                <simple>${body['Response']} == 'Success' &amp;&amp; ${body['Challenge']} != null</simple>
+                <setHeader name="AMI_USERNAME">
+                    <simple>{{freepbx.ami_username:username}}</simple>
+                </setHeader>
+                <setHeader name="AMI_KEY">
+                    <simple>${hash(${body['Challenge']}{{freepbx.ami_secret:secret}},MD5)}</simple>
+                </setHeader>
+                <to uri="velocity:velocity/ami_login.vm"/>
+                <to uri="seda:reply"/>
+            </when>
+            <when>
+                <!-- Authentication failed! -->
+                <simple>${body['Response']} == 'Error' &amp;&amp; ${body['Message']} == 'Authentication failed'</simple>
+                <log logName="lan.net" loggingLevel="ERROR" message="Authentication failed!"/>
+            </when>
+            <when>
+                <!-- Чистим старые данные в самом начале сессии -->
+                <simple>${body['Event']} == 'FullyBooted'</simple>
+                <setHeader name="SQL_DELETE_INTERVAL">
+                    <constant>1</constant>
+                </setHeader>
+                <to uri="sql:classpath:sql/delete_by_tic.sql"/>
+                <to uri="sql:classpath:sql/delete_device_state.sql"/>
+            </when>
+            <when>
+                <simple>${body['Event']} == 'PeerStatus'</simple>
+                <to uri="sql:classpath:sql/insert_peer_status.sql"/>
+            </when>
+            <when>
+                <simple>${body['Event']} == 'DeviceStateChange'</simple>
+                <to uri="sql:classpath:sql/insert_device_state.sql"/>
+            </when>
+            <when>
+                <!-- InvalidAccountID, InvalidPassword, InvalidTransport события. -->
+                <simple>${body['Event']} in 'InvalidAccountID,InvalidPassword,InvalidTransport'</simple>
+                <to uri="sql:classpath:sql/insert_invalid_event.sql"/>
+            </when>
+            <when>
+                <simple>${body['Event']} == 'Registry'</simple>
+                <to uri="sql:classpath:sql/insert_registry.sql"/>
+            </when>
+            <otherwise>
+                <transform>
+                    <simple/>
+                </transform>
+            </otherwise>
+        </choice>
+    </route>
+
+    <route>
+        <from uri="netty-http:http://{{freepbx.http_address:localhost}}:{{freepbx.http_port:8080}}?matchOnUriPrefix=true"/>
+        <to uri="direct:headers"/>
+        <choice>
+            <when>
+                <simple>${headers['CamelHttpMethod']} != 'GET'</simple>
+                <setHeader name="CamelHttpResponseCode">
+                    <constant>405</constant>
+                </setHeader>
+            </when>
+            <when>
+                <simple>${headers['CamelHttpPath']} == '/DuplicateRegistrations'</simple>
+                <to uri="sql:classpath:sql/select_peer_status_log.sql"/>
+                <to uri="velocity:velocity/html_peer_status_log.vm"/>
+            </when>
+            <when>
+                <simple>${headers['CamelHttpPath']} == '/InvalidEvents'</simple>
+                <to uri="sql:classpath:sql/select_invalid_event_log.sql"/>
+                <to uri="velocity:velocity/html_invalid_events.vm"/>
+            </when>
+            <when>
+                <simple>${headers['CamelHttpPath']} == '/PeerStatus'</simple>
+                <to uri="sql:classpath:sql/select_peer_status.sql"/>
+                <to uri="velocity:velocity/html_peer_status.vm"/>
+            </when>
+            <when>
+                <simple>${headers['CamelHttpPath']} == '/Registrations'</simple>
+                <to uri="sql:classpath:sql/select_registry.sql"/>
+                <to uri="velocity:velocity/html_registry.vm"/>
+            </when>
+            <otherwise>
+                <setHeader name="CamelHttpResponseCode">
+                    <constant>404</constant>
+                </setHeader>
+            </otherwise>
+        </choice>
+    </route>
+
+    <route>
+        <from uri="seda:reply"/>
+        <process ref="#class:lan.net.NettyReplyProcessor"/>
+    </route>
+</routes>

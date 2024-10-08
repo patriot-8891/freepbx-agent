@@ -1,0 +1,6 @@
+Action: Login
+Username: ${headers.AMI_USERNAME}
+AuthType: MD5
+Key: ${headers.AMI_KEY}
+Events: on
+
